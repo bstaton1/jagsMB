@@ -122,3 +122,28 @@ char2FUN = function(char) {
   # create it as an object
   eval(parse(text = char))
 }
+
+#' Style code for JAGS
+#'
+#' Ensures printed code is formatted nicely and easily readable by humans
+#'
+#' @param x Character vector with elements storing distinct lines of JAGS
+#'   model code
+#' @note For internal use only, users need not concern themselves
+#'   with this function
+#' @details Primarily used for managing indentation when multiline
+#'   code is wrapped in `{}`
+
+jags_styler = function(x) {
+  protect_T_I = function(x) {
+    x |>
+      stringr::str_replace("\\)\\s?T\\(", ") %_% T(") |>
+      stringr::str_replace("\\)\\s?I\\(", ") %_% I(")
+  }
+
+  styler::style_text(
+    protect_T_I(x),
+    math_token_spacing = styler::specify_math_token_spacing(zero = c("'/'", "'^'")),
+    scope = I(c("line_breaks", "tokens", "indention")), strict = TRUE
+  )
+}
