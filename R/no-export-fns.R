@@ -61,3 +61,41 @@ check_model_file = function(model_file = NULL) {
 
 }
 
+#' Convert JAGS Model from Function to Character Format
+#'
+#' Isolates the function body into a standard
+#' character vector
+#'
+#' @param FUN Function containing JAGS model code
+#' @param keep_commments Logical flag indicating whether to retain comments
+#'   (i.e., lines starting with `#`) in the output (default is `TRUE`)
+#' @note For internal use only, users need not concern
+#'   themselves with this function
+#' @return Character vector with elements containing distinct lines of code from
+#'   the body of the function supplied to `FUN`
+
+FUN2char = function(FUN, keep_comments = TRUE) {
+
+  # check if FUN is a function object
+  check_FUN(FUN)
+
+  # extract the function body, including comments
+  code = attr(FUN, "srcref")
+  code = as.character(code)
+
+  # remove first line: this is either "{" or "function() {"
+  code = code[-1]
+
+  # remove the last line: this is always "}"
+  code = code[-length(code)]
+
+  # remove white space at the front of each line
+  code = drop_lws(code)
+
+  # remove any comment lines if requested
+  if (!keep_comments) code = code[!stringr::str_detect(code, "^#")]
+
+  # return the output
+  return(code)
+}
+
