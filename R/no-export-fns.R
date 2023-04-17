@@ -99,3 +99,26 @@ FUN2char = function(FUN, keep_comments = TRUE) {
   return(code)
 }
 
+#' Convert JAGS Model from Character to Function Format
+#'
+#' @param char Character vector with elements storing distinct lines of JAGS
+#'   model code
+#' @note For internal use only, users need not concern
+#'   themselves with this function
+#' @return Function containing JAGS model code
+
+char2FUN = function(char) {
+
+  # cut of model head and tail if needed
+  if (char[1] == "model {") char = char[-1]
+  if (char[length(char)] == "}  # END OF MODEL") char = char[-length(char)]
+
+  # wrap the code into a function
+  char = c("function() {", char, "}")
+
+  # style the code
+  char = jags_styler(char)
+
+  # create it as an object
+  eval(parse(text = char))
+}
