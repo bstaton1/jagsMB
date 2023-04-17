@@ -154,3 +154,33 @@ model_write = function(FUN,
   invisible(model_file)
 }
 
+#' Read Model File
+#'
+#' Wrapper for [base::readLines()] but with defaults and
+#' styling to handle indentation
+#'
+#' @param model_file Name of file containing JAGS model code;
+#'   defaults to `jagsMB_opts("model_file")`.
+#' @param keep_lws Logical flag indicating whether to retain leading white space
+#'   on each line (default is `TRUE`).
+#' @return A character vector with elements storing each line of the model file
+#'   contents.
+#' @export
+
+model_read = function(model_file = jagsMB_opts("model_file"),
+                      keep_lws = TRUE
+                      ) {
+
+  # check the model_file argument for validity
+  check_model_file(model_file)
+
+  # read in the model file
+  code = readLines(model_file, warn = FALSE)
+
+  # remove leading white space if instructed
+  if (!keep_lws) code = drop_lws(code)
+
+  # return the model code
+  return(code)
+}
+
