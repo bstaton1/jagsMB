@@ -305,3 +305,76 @@ model_vars = function(model_file = jagsMB_opts("model_file")) {
   return(out)
 }
 
+#' Search Model File for a Pattern
+#'
+#' Returns the line numbers containing a
+#' pattern match, with the option to search
+#' on either the left- or right-hand side
+#' of the assignment operator on that line.
+#'
+#' @inheritParams model_read
+#' @param pattern Character string to find matches for in the model
+#'   definition found in `model_file`. Supplied to [stringr::str_which()]
+#'   so may be regex.
+#' @param side Character string; one of `"left"`, `"right"`, or `"any"`;
+#'   the side of the assignment operator (`~` or `<-` the string matching
+#'   `pattern` is found).
+#' @export
+
+model_search = function(model_file = jagsMB_opts("model_file"),
+                        pattern,
+                        side = "any"
+                        ) {
+
+  # error handle to ensure acceptable side was supplied
+  accepted = c("left", "right", "any")
+  if (!(side %in% accepted)) {
+    stop ("'side' must be one of: ", knitr::combine_words(accepted,
+                                                        and = ' or ',
+                                                        before = '"'))
+  }
+
+  # check the model_file argument for validity
+  check_model_file(model_file)
+
+  # read in model code
+  model_code = model_read(model_file)
+
+  # function to return the code on either side of a single relation
+  get_side = function(x, side = "left") {
+    # split the string at a relation operator
+    split = stringr::str_split_1(x, "<-|~") |>
+      drop_lws() |>
+      drop_tws()
+
+    # return the correct side if line was a relation
+    # return NA if line was not a relation
+    if (length(split) > 1) {
+      names(split) = c("left", "right")
+      out = unname(split[side])
+    } else {
+      out = NA
+    }
+    return(out)
+  }
+
+  # extract the code on either side of all relations
+  right_side = sapply(1:length(model_code), function(i) {
+    get_side(model_code[i], side = "right")
+  })
+  left_side = sapply(1:length(model_code), function(i) {
+    get_side(model_code[i], side = "left")
+  })
+
+  # determine if the pattern is matched on either side of all relations
+  in_right = stringr::str_detect(right_side, pattern)
+  in_left = stringr::str_detect(left_side, pattern)
+
+  # return the lines where the match was found in the correct placement
+  switch(side,
+         "left" = which(in_left),
+         "right" = which(in_right),
+         "any" = which(in_left | in_right)
+  )
+}
+
