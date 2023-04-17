@@ -33,3 +33,31 @@ drop_tws = function(x) {
   stringr::str_remove(x, "\\s+$")
 }
 
+#' Check `FUN` Argument
+#'
+#' Standardized check for function
+#'
+#' @inheritParams model_write
+#' @details Simply checks if `is.function(FUN)`, and if `FALSE`,
+#'   returns an error
+#' @note For internal use only, users need not concern
+#'   themselves with this function
+
+check_FUN = function(FUN) {
+  if (!is.function(FUN) & !is.null(FUN)) stop("'FUN' must be a function object")
+}
+
+#' Check `model_file` Argument
+#'
+#' Standardized check for JAGS model file names
+#'
+#' @param model_file Name of file containing JAGS model code
+#' @details Currently simply checks if is `NULL`,
+#'   but more informative checks will likely be added in future versions
+#'
+check_model_file = function(model_file = NULL) {
+
+  if (is.null(model_file)) stop ("'model_file' cannot be NULL")
+
+}
+
