@@ -15,16 +15,18 @@ Description: Provides lightweight facilities to build up large JAGS models
   write pipeline. After the model is exported to a file, tools are provided to 
   print specific line numbers, search it for regex matches, and replace specific
   lines.
-License: MIT + File LICENSE
+License: MIT + file LICENSE
 Depends: 
     R (>= 4.1)
 Imports:
     stringr (>= 1.3.1),
     styler,
     settings,
-    details
+    details,
+    knitr
 Suggests:
     R2OpenBUGS
 Encoding: UTF-8
+VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
