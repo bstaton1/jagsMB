@@ -257,3 +257,51 @@ model_lines = function(model_file = jagsMB_opts("model_file"),
   cat(show_code, sep = "\n")
 }
 
+#' List all Variable Names in JAGS Model
+#'
+#' Returns the names of all variables defined
+#' within the JAGS model code
+#' (i.e., found on the left-hand side of `<-` or `~`).
+#'
+#' @inheritParams model_read
+#' @return A list object with elements storing the types of variables
+#'   created within the JAGS model:
+#'   * `$logical` variables defined to the left of a `<-` operator.
+#'   * `$stochastic`: variables defined to the left of a `~` operator.
+#' @export
+
+model_vars = function(model_file = jagsMB_opts("model_file")) {
+
+  # check the model_file argument for validity
+  check_model_file(model_file)
+
+  # read in model code
+  model_code = model_read(model_file, keep_lws = FALSE)
+
+  # define patterns
+  stoch_pattern = "\\s?~\\s?d[:alpha:]+\\(.+$"  # stochastic nodes match this
+  index_pattern = "\\[.+\\]"                    # this matches the indices
+  logic_pattern = "\\s?<-\\s?.+"                # this matches logical nodes
+  linkf_pattern = "^[:alpha:]+\\("              # this matches link functions
+
+  # find all stochastic nodes
+  stoch_matches = model_code[stringr::str_detect(model_code, stoch_pattern)]
+  stoch_nodes = stringr::str_remove(stoch_matches, stoch_pattern)
+  stoch_nodes = stringr::str_remove(stoch_nodes, index_pattern)
+
+  # all logical portions
+  logic_matches = model_code[stringr::str_detect(model_code, logic_pattern)]
+  logic_nodes = stringr::str_remove(logic_matches, logic_pattern)
+  logic_nodes = stringr::str_remove(logic_nodes, linkf_pattern)
+  logic_nodes = stringr::str_remove(logic_nodes, paste0(index_pattern, "\\)?"))
+
+  # bundle the output into a list
+  out = list(
+    logical = unique(logic_nodes),
+    stochastic = unique(stoch_nodes)
+  )
+
+  # return the output
+  return(out)
+}
+
