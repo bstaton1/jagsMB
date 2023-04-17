@@ -45,3 +45,24 @@ model_header = function(text = "text", decor = "### --- ", toupper = TRUE) {
   eval(parse(text = code))
 }
 
+#' Combine Components into One Model
+#'
+#' Extracts the body from multiple functions (which store individual
+#' model components), combines them, and returns the combined function.
+#'
+#' @param FUN_list List object where each element stores a function
+#'   (containing a JAGS model component) to be combined with other
+#'   model components.
+#' @return Function with the function bodies contained in the elements of
+#'  `FUN_list` combined into the body of one function.
+#' @export
+
+model_build = function(FUN_list) {
+
+  # put the pieces together
+  code = unlist(lapply(FUN_list, function(f) c(FUN2char(f), "")))
+
+  # convert the code into a function
+  char2FUN(code)
+}
+
