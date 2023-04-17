@@ -378,3 +378,56 @@ model_search = function(model_file = jagsMB_opts("model_file"),
   )
 }
 
+#' Replace a Line of Code in Existing Model File
+#'
+#' @inheritParams model_search
+#' @param model_file Name of file containing JAGS model code that
+#'   should be edited; defaults to `NULL`, requiring the user to supply a value.
+#' @param replacement Character string containing JAGS code that should
+#'   replace the line of code matched by `pattern`.
+#' @param new_model_file Name of file to write the new JAGS model code;
+#'   must have `".txt"` extension.
+#' @note [model_write()] and `model_replace()` are the only functions that
+#'   accept a `model_file` argument but do not default to
+#'  `jagsMB_opts("model_file)"`. Instead they default to `NULL`, which returns
+#'   an error requiring the user to supply a file path manually.
+#' @details Only one line of code can be matched at a time -- an error message
+#'   containing the offending line numbers will be returned
+#'   in the case of multiple matches. When found, the **entire singular line**
+#'   containing the match is replaced.
+#' @note It is advisable to test this with the `new_model_file` argument set
+#'   to verify that the change is made properly before using the overwrite
+#'   functionality.
+#' @export
+
+model_replace = function(model_file = NULL,
+                         pattern,
+                         replacement,
+                         new_model_file = model_file
+                         ) {
+
+  # check the model_file argument for validity
+  check_model_file(model_file)
+
+  # read in model code
+  model_code = model_read(model_file, keep_lws = FALSE)
+
+  # find the line where the pattern is found
+  line = stringr::str_which(model_code, pattern)
+
+  # handles for different cases
+  if (length(line) == 0) stop ("No lines found that match pattern")
+
+  if (length(line) > 1) {
+    stop ("More than one line matches pattern (lines ",
+          knitr::combine_words(paste0("L", line)),
+          "); only one match supported")
+  }
+
+  # insert the new line
+  model_code[line] = replacement
+
+  # write out the new model code
+  char2FUN(model_code) |>
+    model_write(model_file = new_model_file)
+}
