@@ -1,0 +1,29 @@
+Package: jagsMB
+Title: JAGS Model Builder
+Version: 0.1.0
+Authors@R: 
+    person("Ben", "Staton", , "statonbe@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-2342-3482"))
+Description: Provides lightweight facilities to build up large JAGS models
+  that are comprised of smaller, potentially swappable, components. 
+  Because every JAGS model fitted requires a model definition, analyses that
+  involve to reproducibly comparing many models must manage many model files.
+  This typically requires repetition and wasted time making changes to the
+  same code found in multiple model definitions. With the 'jagsMB' workflow, 
+  the user defines JAGS model within R functions, combines them according to 
+  customized rules into a list to be passed through a check, build, and
+  write pipeline. After the model is exported to a file, tools are provided to 
+  print specific line numbers, search it for regex matches, and replace specific
+  lines.
+License: MIT + File LICENSE
+Depends: 
+    R (>= 4.1)
+Imports:
+    stringr (>= 1.3.1),
+    styler,
+    settings
+Suggests:
+    R2OpenBUGS
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
