@@ -1,0 +1,602 @@
+---
+title: "jagsMB Overview"
+author: B. Staton
+date: "`r lubridate::today()`"
+output: 
+  rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{jagsMB Overview}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA)
+```
+
+```{r, echo = FALSE}
+library(details)
+```
+
+# Package Motivation
+
+```{r}
+library(jagsMB)
+```
+
+For Bayesian analyses conducted with JAGS, the user must create a model definition statement -- this statement can be generated several ways but is placed in a plain text file.
+
+For a simple linear regression model, the model definition might look something like this:
+
+```
+model {
+  
+  # priors
+  b0 ~ dnorm(0, 0.001)
+  b1 ~ dnorm(0, 0.001)
+  sigma ~ dunif(0, 10)
+  
+  # likelihood
+  for (i in 1:n) {
+    y[i] ~ dnorm(b0 + b1 * x[i], 1/sigma^2)
+  }
+  
+}
+```
+
+The variables `x`, `y`, and `n` are passed to JAGS as known, and samples from the joint posterior distribution of `b0`, `b1`, and `sigma` are returned. 
+
+However, it is very common to have multiple models that make different assumptions, use different priors, or otherwise treat the relationships among variables differently.
+Different models require different definitions, and managing multiple model definitions is cumbersome.
+
+Oftentimes there are parts of the multiple models that are shared and some parts that are unique to some models; this can result in much repetition among the multiple models (see an [extreme example](https://github.com/bstaton1/FitSR/blob/master/R/z_models.R) of this from my work).
+Thus, if a change is required to a model component that is common to multiple models, the change needs to be made in multiple places, hence being cumbersome and potentially error-prone.
+
+As a remedy, the philosophy of 'jagsMB' is to separate a model into components that can be swapped in when needed.
+This way, there are only multiple definitions of model components that vary among models; those components that are common across models may have a singular definition.
+
+# Approaches to Model Definition
+
+Suppose we wish to place the above model in a text file (e.g., `model.txt`) that can be read by JAGS.
+Prior to 'jagsMB', there are three ways this has commonly been done:
+
+1. **Created directly** within a `model.txt` file -- the user creates a blank file and enters the code directly into the file. 
+2. **Created as a text string** in R and written to `model.txt` using something like:
+
+    ```{r, eval = FALSE}
+    sink("model.txt")
+    cat("
+        model {
+          # priors
+          b0 ~ dnorm(0, 0.001)
+          b1 ~ dnorm(0, 0.001)
+          sigma ~ dunif(0, 10)
+  
+          # likelihood
+          for (i in 1:n) {
+            y[i] ~ dnorm(b0 + b1 * x[i], 1/sigma^2)
+          }
+        }", fill = TRUE)
+    sink()
+    ```
+    
+    This approach, although found widely in instructional books and manuals, is clunky to type and edit if you care at all about proper code indentation.
+    Text editors (at least RStudio) will not perform auto-indenting because the model code is wrapped in quotes, meaning that the user must manually input the spaces required to accomplish the indenting for easier readability.
+    Approach (1) generally suffers from this problem as well.
+  
+3. **Created as a function** in R, which is passed to specialized function that extracts the model code and writes it to a file. For example:
+
+   ```{r, eval = FALSE}
+   jags_model_code = function() {
+     # priors
+     b0 ~ dnorm(0, 0.001)
+     b1 ~ dnorm(0, 0.001)
+     sigma ~ dunif(0, 10)
+     
+     # likelihood
+     for (i in 1:n) {
+       y[i] ~ dnorm(b0 + b1 * x[i], 1/sigma^2)
+     }
+   }
+   R2OpenBUGS::write.model(jags_model_code, "model.txt")
+   ```
+   
+  Specifying the model definition this way conveniently allows the text editor to properly handle the indentation for you, as well as other features like code highlighting, parenthesis matching, etc. that one grows accustomed to in a text editor designed for coding.
+
+Approach (3) is my personal favorite and is the approach that inspired 'jagsMB'.
+
+# Model Definition Workflow with 'jagsMB'
+
+For this example, suppose you are fitting a GLM to count data (called `y`) with a single continuous predictor (called `x`).
+You wish to fit two models: one that assumes a Poisson distribution and another that assumes a negative binomial distribution.
+
+Rather than having two model definitions, you decide to separate the model code into distinct components -- some of these components will be the same regardless of the distribution assumption, whereas others will be used only in one of the two models.
+
+## Define Components
+
+### Priors
+
+Start by defining the priors for the coefficients -- these will be used regardless of the distributional assumption:
+
+```{r}
+beta_priors = function() {
+  # priors for coefficients
+  b0 ~ dnorm(0, 0.001)
+  b1 ~ dnorm(0, 0.001)
+}
+```
+
+If the model is negative binomial, we must also estimate a dispersion parameter (`r`).
+Since only want this in the model under some circumstances, let's separate it from the rest of the priors:
+
+```{r}
+r_priors = function() {
+  # prior for NB dispersion parameter
+  r ~ dunif(0, 100)
+}
+```
+
+### Linear Predictor
+
+The calculation of the expected count (`lambda`) is the same regardless of the model, so we need only one version:
+
+```{r}
+lambda = function() {
+  # obtain expected count for observed predictor
+  for (i in 1:n_obs) {
+    log(lambda[i]) <- b0 + b1 * x[i]
+  }
+}
+```
+
+### Data Likelihood
+
+This is the key aspect that must change between models, so clearly we should define the likelihood statement for the two models separately.
+
+For the Poisson model:
+
+```{r}
+likelihood_pois = function() {
+  for (i in 1:n_obs) {
+    y[i] ~ dpois(lambda[i])
+  }
+}
+```
+
+For the negative binomial model:
+
+```{r}
+likelihood_nb = function() {
+  for (i in 1:n_obs) {
+    y[i] ~ dnegbin(p[i], r)
+    p[i] <- r/(lambda[i] + r)
+  }
+}
+```
+
+## Build Selection Rules
+
+Now we must construct the rules to dictate which model components to use in which cases.
+I find it easiest to wrap this step into a function, but that is not necessary.
+However, you do need a list object that contains the desired model components as elements.
+
+```{r}
+select_components = function(assume) {
+  
+  # combine components into a list
+  # the switch() calls select the correct component to use
+  list(
+    model_header("priors"),
+    beta_priors,
+    switch(assume, "negbin" = r_priors, "poisson" = NULL),
+    model_header("likelihood"),
+    switch(assume, "negbin" = likelihood_nb, "poisson" = likelihood_pois),
+    lambda
+  )
+}
+```
+
+The `model_header()` function inserts a 'section break' in the model code that can help for readability.
+
+## Build/Write Complete Model Code
+
+Now we are ready to build and export the model (i.e., write contents to a file) using the default model settings (`assume = "poisson"`):
+
+```{r}
+model_file = select_components("poisson") |>
+  model_build() |>
+  model_write()
+```
+
+`model_build()` combines the bodies of multiple functions into one and `model_write()` exports the contents of the function to a file to be read by JAGS.
+
+The model definition is written to a temporary file by default, but a user-defined file can be passed to the `model_file` argument.
+This `model_file` (full path invisibly returned by `model_write()`) is now ready to be supplied to your JAGS-conjuring function of choice, typically to a `model.file` argument.
+
+You can open the `.txt` file using your system default viewer:
+
+```{r, eval = FALSE}
+file.show(model_file)
+```
+
+```{details, details.lang = "", echo = FALSE, details.summary = "View Model Code"}
+model_file
+```
+
+Switching to the negative binomial model is as simple as changing the value of the `assume` argument:
+
+```{r}
+model_file = select_components("negbin") |>
+  model_build() |>
+  model_write()
+```
+
+```{details, details.lang = "", echo = FALSE, details.summary = "View Model Code"}
+model_file
+```
+
+# Formatting Adjustments
+
+The comments and/or blank lines can be removed from the model definition if desired, though this has no impact on how JAGS operates.
+
+```{r}
+model_file = select_components("poisson") |>
+  model_build() |>
+  model_write(keep_empty = FALSE, keep_comments = FALSE)
+```
+    
+```{details, details.lang = "", echo = FALSE, details.summary = "View Model Code"}
+model_file
+```
+
+The format of the headers can be adjusted a bit as well:
+
+```{r}
+model_file = list(
+  model_header("priors", decor = "# **--**--**-- "),
+  beta_priors,
+  model_header("likelihood", toupper = FALSE)
+) |>
+  model_build() |>
+  model_write()
+```
+    
+```{details, details.lang = "", echo = FALSE, details.summary = "View Model Code"}
+model_file
+```
+
+# Model Inspection
+
+For these examples, let's go back to the Poisson model with default formatting:
+
+```{r}
+model_file = select_components("poisson") |>
+  model_build() |>
+  model_write(keep_empty = FALSE, keep_comments = FALSE)
+```
+    
+```{details, details.lang = "", echo = FALSE, details.summary = "View Model Code"}
+model_file
+```
+
+### `model_read()`
+
+You can import the model as a character vector, where each element represents one line from the model code:
+
+```{r}
+model_read(model_file = model_file)
+```
+
+Which can be passed to `cat()` for a nicer view.
+
+```{r}
+model_read(model_file) |>
+  cat(sep = "\n")
+```
+
+The `keep_lws = FALSE` argument setting is useful to exclude the leading white space from all lines upon importing (this can be convenient for manipulation later):
+
+```{r}
+model_read(model_file, keep_lws = FALSE) |>
+  cat(sep = "\n")
+```
+
+Here we quickly introduce the package options functionality.
+If you are working with a single a single JAGS model file, it can be annoying to type the object name continuously for all functions that accept the `model_file` argument.
+You can set a session-wide default value:
+
+```{r}
+jagsMB_opts(model_file = model_file)
+```
+
+Which allows you to call functions with the `model_file` argument without specifying its value.
+
+```{r}
+model_read() |>
+  cat(sep = "\n")
+```
+
+You can access the value of the setting any time:
+
+```{r, eval = FALSE}
+jagsMB_opts("model_file")
+```
+
+Or reset it:
+
+```{r}
+jagsMB_opts_reset()
+```
+
+Now, without a value to pass to the argument, `model_read()` will fail:
+
+```{r, error = TRUE}
+model_read()
+```
+
+**WARNING**: If you are ever working with two or more model files in the same R session, it is highly advisable to not use this shortcut, since it becomes possible to lose track of which model is which.
+But let's set it for the rest of this section:
+
+```{r}
+jagsMB_opts(model_file = model_file)
+```
+
+### `model_lines()`
+
+Enables quickly viewing specific lines from a model file -- useful for debugging when JAGS gives `syntax error on line ...` messages:
+
+```{r}
+model_lines(lines = 4:6)
+```
+ 
+Line numbers can be excluded:
+  
+```{r}
+model_lines(lines = 4:6, show_labels = FALSE)
+```
+
+Retaining the `lines = NULL` default will print the entire model:
+
+```{r}
+model_lines()
+```
+
+The first line (i.e., `model {`) and last line (i.e., `}  # END OF MODEL`) lines can be discarded by setting `keep_first_last = FALSE`:
+
+```{r}
+model_lines(keep_first_last = FALSE)
+```
+
+### `model_vars()`
+
+Can be used to get the names of all variables in the model:
+
+```{r}
+model_vars()
+```
+ 
+Variables with `stochastic` and `logical` assignment operators are reported separately -- these are distinguished in the model code by `~` and `<-` operators, respectively.
+  
+### `model_search()` 
+
+Searches a model file for a provided pattern and returns the line numbers where it is found:
+
+```{r}
+model_search(pattern = "b0")
+```
+    
+View line numbers where the pattern is matched on the left- or right-hand side of a relation operator (i.e., `<-` or `~`):
+  
+```{r}
+model_search(pattern = "b0", side = "left")
+model_search(pattern = "b0", side = "right")
+```
+  
+Supplying these indices to the `lines` argument of `model_lines()` will query and view all the places in the model where a variable is used:
+
+```{r}
+model_search(pattern = "lambda") |>
+  model_lines(lines = _)
+```
+
+When making changes regarding a variable in a large model, this can help ensure all content is accounted for.
+
+Here are a couple examples of ways this could be used:
+
+*  How does this model handle the links between variables `mean_foo`, `sig_foo`, `rho_foo`, `obs_foo`, and `obs_foo_sd`?
+    ```{r, eval = FALSE}
+    model_lines(model_file, pattern = ".+_foo")
+    ```
+  
+* What are all of the `tau` priors?
+    
+    ```{r, eval = FALSE}
+    model_lines(model_file, pattern = "tau\\s?~\\s?d.+\\(")`
+    ```
+    
+  _This would match any of `tau ~ danything(`, with or without spaces_
+
+# Editing Existing Model File
+
+It is sometimes useful to edit a model file has already been saved.
+The function `model_replace()` enables replacing **a single line** of code in the saved model file with something else.
+
+Since we are moving into editing and potentially creating multiple model files, we should remove the default `model_file` setting.
+This will force us to provide a file path, ensuring we know which files are being edited.
+
+```{r}
+jagsMB_opts_reset()
+```
+
+## Example #1
+
+Begin by defining the negative binomial model:
+
+```{r}
+model_file = select_components(assume = "negbin") |>
+  model_build() |>
+  model_write()
+
+# view a portion of the original model
+model_lines(model_file, 9:10)
+```
+
+Now suppose you wish to try fitting the model with a `dunif(0, 1000)` prior on `r` instead: 
+
+```{r}
+model_replace(model_file, 
+              pattern = "r ~ ", replacement = "r ~ dunif(0, 1000)"
+              )
+
+# view the same portion from the edited model
+model_lines(model_file, 9:10)
+```
+
+The original model file is overwritten with the new content by default, thus this function should be used with great care.
+The `pattern` argument is passed to `stringr::str_which()`, and so can be a regular expression -- the entire line that matches `pattern` will be replaced, not just the portion of the line that matches `pattern`.
+If you wish to retain the original model and save a version of the edited file under a new name using the `new_model_file` argument:
+
+```{r}
+model_file = select_components(assume = "negbin") |>
+  model_build() |>
+  model_write()
+
+# define name of new model file
+model_file2 = "test.txt"
+
+# view a portion of the original model
+model_lines(model_file, 9:10)
+
+# perform the editing
+model_replace(model_file, 
+              pattern = "r ~ ", replacement = "r ~ dunif(0, 1000)",
+              new_model_file = model_file2
+              )
+
+# check that original model left unchanged
+model_lines(model_file, 9:10)
+
+# check that new file has change made
+model_lines(model_file2, 9:10)
+```
+
+Here we delete the new model file before moving on to the next example.
+
+```{r}
+unlink(model_file2)
+```
+
+Note that a single call to `model_replace()` can edit only one line in the model. Thus this code returns an error:
+
+```{r, error = TRUE}
+model_replace(model_file, pattern = "b. ~ ", replacement = "something")
+```
+
+And we can see why -- both of these lines match the pattern `"b. ~ "`:
+
+```{r}
+model_lines(model_file, 6:7)
+```
+
+## Example #2
+
+As another example to better illustrate the utility of this function, suppose you would like to try several different priors for a parameter in your model called `alpha`.
+
+```{r}
+# define model components
+# deliberately leave a placeholder
+priors = function() {
+  ALPHA_PRIOR_REPLACE
+  beta ~ dnorm(0, 0.001)
+  sigma ~ dunif(0, 1)
+}
+
+likelihood = function() {
+  for (i in 1:n) {
+    y[i] ~ dnorm(y_hat[i], 1/sigma^2)
+    y_hat[i] <- alpha + beta * x[i]
+  }
+}
+
+# create a file name for the template model
+template_file = "template.txt"
+
+# write the template model to disk
+model_build(FUN_list = list(priors, likelihood)) |> 
+  model_write(model_file = template_file)
+
+# view the model
+model_lines(template_file)
+```
+
+Now, define an object that stores the different settings you'd like to swap in for the placeholder:
+
+```{r}
+alpha_priors = c(
+  "alpha ~ dnorm(0, 0.001)",
+  "alpha ~ dnorm(0, 0.001) %_% T(0,)",
+  "alpha ~ dunif(-5, 5)"
+)
+```
+
+Loop over the elements of this object, calling `model_replace()` with a different `new_model_file` argument value each time:
+
+```{r, eval = FALSE}
+sapply(1:length(alpha_priors), function(i) {
+  # create a new file name
+  new_model_file = paste0("model-", i, ".txt")
+  
+  # perform the replacement
+  model_replace(template_file, "ALPHA_PRIOR_REPLACE", alpha_priors[i], new_model_file)
+  
+  # print the model (optional)
+  cat("\n", new_model_file, ":\n\n", sep = "")
+  model_lines(new_model_file)
+})
+```
+
+```{r, echo = FALSE}
+junk = sapply(1:length(alpha_priors), function(i) {
+  # create a new file name
+  new_model_file = paste0("model-", i, ".txt")
+  
+  # perform the replacement
+  model_replace(template_file, "ALPHA_PRIOR_REPLACE", alpha_priors[i], new_model_file)
+  
+  # print the model (optional)
+  cat("\n", new_model_file, ":\n\n", sep = "")
+  model_lines(new_model_file)
+})
+```
+
+After this step, it may be desirable to delete the template file:
+
+```{r}
+unlink(template_file)
+```
+
+And you can see that these desired model files are now in the location they were written, ready to be sequentially passed off to JAGS:
+
+```{r}
+list.files(pattern = "\\.txt$")
+```
+
+```{r, echo = FALSE}
+unlink(c("model-1.txt", "model-2.txt", "model-3.txt"))
+```
+
+## Planned Features
+
+* Isolate a prior from a JAGS model and generate samples from it.
+  * Will likely be a wrapper around most other functions in this package to extract the correct line, build a basic model file from it, and call JAGS on it.
+  * It could be sampled with R directly, but there are some parameterization/distribution overlap issues (e.g., `dscaled.wishart()`)
+  * Would require JAGS, `rjags` on users computer
+* Have `model_vars()` take an optional `jags_data` argument
+  * If supplied, have `$stochastic` and `$logical` be separated into `[[x]]$observed` and `[[x]]$unobserved` nested list elements
+* Introduce an S3 class to:
+  * Store model lines, model file location, etc.
+  * Enforce consistency
+  * Has generic methods
+    * Generic print method `print` could replace `model_lines()`
