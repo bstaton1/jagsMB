@@ -5,7 +5,7 @@ jagsMB_OPTIONS = settings::options_manager(model_file = NULL, model = NULL)
 #'
 #' @param ... Option names to retrieve options values or `key = value` pairs
 #'   to set options. The only value currently accepted is `model_file`,
-#'   which serves as the default argument value for [read_model()],
+#'   which serves as the default argument value for [model_read()],
 #'   [model_lines()], [model_vars()], and [model_search()].
 #' @export
 

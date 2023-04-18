@@ -76,7 +76,7 @@ model_build = function(FUN_list) {
 #'   must have `".txt"` extension.
 #'   Default (`NULL`) is to create a temporary file name with
 #'   `tempfile(pattern = "", fileext = ".txt")`.
-#' @param keep_commments Logical flag indicating whether to retain comments
+#' @param keep_comments Logical flag indicating whether to retain comments
 #'  (i.e., lines starting with `#`) in the output (default `TRUE`).
 #' @param keep_empty Logical flag indicating whether to retain entirely
 #'   empty lines.

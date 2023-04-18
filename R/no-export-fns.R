@@ -67,7 +67,7 @@ check_model_file = function(model_file = NULL) {
 #' character vector
 #'
 #' @param FUN Function containing JAGS model code
-#' @param keep_commments Logical flag indicating whether to retain comments
+#' @param keep_comments Logical flag indicating whether to retain comments
 #'   (i.e., lines starting with `#`) in the output (default is `TRUE`)
 #' @note For internal use only, users need not concern
 #'   themselves with this function
