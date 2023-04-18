@@ -586,17 +586,3 @@ list.files(pattern = "\\.txt$")
 ```{r, echo = FALSE}
 unlink(c("model-1.txt", "model-2.txt", "model-3.txt"))
 ```
-
-## Planned Features
-
-* Isolate a prior from a JAGS model and generate samples from it.
-  * Will likely be a wrapper around most other functions in this package to extract the correct line, build a basic model file from it, and call JAGS on it.
-  * It could be sampled with R directly, but there are some parameterization/distribution overlap issues (e.g., `dscaled.wishart()`)
-  * Would require JAGS, `rjags` on users computer
-* Have `model_vars()` take an optional `jags_data` argument
-  * If supplied, have `$stochastic` and `$logical` be separated into `[[x]]$observed` and `[[x]]$unobserved` nested list elements
-* Introduce an S3 class to:
-  * Store model lines, model file location, etc.
-  * Enforce consistency
-  * Has generic methods
-    * Generic print method `print` could replace `model_lines()`
