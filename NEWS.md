@@ -9,7 +9,7 @@ First stable version released; contains a formalized version of ideas the develo
 ### Summary of Exported Functions
 
 | Function              | Description                                              |
-|----------------------|--------------------------------------------------|
+|---------------------|---------------------------------------------------|
 | `model_header()`      | Inserts a section header into model code                 |
 | `model_build()`       | Combines model components into the complete model        |
 | `model_write()`       | Exports the complete model definition to a file          |
@@ -24,7 +24,7 @@ First stable version released; contains a formalized version of ideas the develo
 ### Summary of Available Documentation
 
 | Item                                                                 | Progress                                                                                                                                                              |
-|------------------------|------------------------------------------------|
+|----------------------|--------------------------------------------------|
 | R Help Files                                                         | Written for all exported and non-exported functions                                                                                                                   |
 | DESCRIPTION File                                                     | Populated with information about package, dependencies declared                                                                                                       |
 | Vignette                                                             | Has sections for motivation, definition workflow, inspecting output, and replacing lines complete with description and reproducible examples.                         |
